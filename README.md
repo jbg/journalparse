@@ -2,12 +2,15 @@ This is a really simple Python parser for the [journald binary export format](ht
 
 It can parse journal entries from a file-like object or an iterable, and calls a provided function for each entry with a `dict` containing all attributes of the journal entry.
 
-    def on_journal_entry(attrs):
-        print(attrs)
+    from journalparse import journalparse
+
 
     with open("some_file", "rb") as fp:
-        journalparse.parse_entries(fp, on_journal_entry)
+        journalparse(fp, lambda entry: print(entry))
 
-    data = b"...."
-    journalparse.parse_entries(data, on_journal_entry)
+    # ... or ...
 
+    data = b"_MESSAGE=blah"
+    journalparse(data, lambda entry: print(entry))
+
+No requirements other than Python. Tested on Python 3.5 but should work on Python 2.6+ and 3.2+.
