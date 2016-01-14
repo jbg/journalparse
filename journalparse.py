@@ -1,3 +1,4 @@
+import itertools
 import struct
 
 
@@ -13,54 +14,54 @@ def bytes_in_file(fp):
         yield byte
 
 
-def journalparse(fp_or_iterable, entry_handler):
+def journalparse(fp_or_iterable):
     state = State.FieldKey
     entry = {}
-    buf = b""
+    buf = bytearray()
 
     if hasattr(fp_or_iterable, "read"):
         fp_or_iterable = bytes_in_file(fp_or_iterable)
 
-    for byte in fp_or_iterable:
+    for byte in itertools.chain(fp_or_iterable, b"\n\n"):
+        if not isinstance(byte, int):
+            byte = ord(byte)
         if state == State.FieldKey:
-            if byte == b"=":
+            if byte == ord(b"="):
                 key = buf
                 state = State.TextFieldValue
-                buf = b""
-            elif byte == b"\n":
+                buf = bytearray()
+            elif byte == ord(b"\n"):
                 if buf:
                     key = buf
                     state = State.BinaryFieldSize
                 else:
-                    entry_handler(entry)
-                    entry = {}
-                buf = b""
+                    if entry:
+                        yield entry
+                        entry = {}
+                buf = bytearray()
             else:
-                buf += byte
+                buf.append(byte)
         elif state == State.TextFieldValue:
-            if byte == b"\n":
-                key = process_key(key.decode("utf-8"))
-                buf = buf.decode("utf-8")
-                entry[key] = buf
+            if byte == ord(b"\n"):
+                entry[key.decode("utf-8")] = buf.decode("utf-8")
                 state = State.FieldKey
-                buf = b""
+                buf = bytearray()
             else:
-                buf += byte
+                buf.append(byte)
         elif state == State.BinaryFieldSize:
             if len(buf) < 8:
-                buf += byte
+                buf.append(byte)
             if len(buf) == 8:
                 size = struct.unpack("<Q", buf)[0]
                 state = State.BinaryFieldValue
-                buf = b""
+                buf = bytearray()
         elif state == State.BinaryFieldValue:
             if len(buf) < size:
-                buf += byte
-            elif byte == b"\n":
-                key = process_key(key.decode("utf-8"))
-                entry[key] = buf
+                buf.append(byte)
+            elif byte == ord(b"\n"):
+                entry[key.decode("utf-8")] = buf
                 state = State.FieldKey
-                buf = b""
+                buf = bytearray()
             else:
                 raise Exception("Expected end of data (newline) after %d bytes, got %s instead" % (size, repr(byte)))
         else:
